@@ -1,10 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Live People & Emotion Tracker</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Detection & People Count</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            text-align: center;
+            color: #333;
+        }
+        h1 {
+            color: #333;
+            font-size: 36px;
+            margin-top: 20px;
+        }
+        .video-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .info {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 20px;
+        }
+        .emotion-text {
+            font-size: 24px;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #FF6347;
+        }
+        .count-text {
+            font-size: 24px;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #32CD32;
+        }
+    </style>
 </head>
 <body>
-    <h1>Live People & Emotion Tracker</h1>
-    <img src="{{ url_for('video_feed') }}" width="80%">
+    <h1>Emotion Detection and People Count</h1>
+    
+    <div class="video-container">
+        <img src="{{ url_for('video_feed') }}" width="640" height="480" />
+    </div>
+
+    <div class="info">
+        <p class="emotion-text" id="dominant-emotion">Dominant Emotion: Waiting...</p>
+        <p class="count-text" id="people-count">People Detected: 0</p>
+    </div>
+
+    <script>
+        // This script will update the UI with the dominant emotion and people count
+        let emotionText = document.getElementById('dominant-emotion');
+        let countText = document.getElementById('people-count');
+
+        // You may want to fetch real-time data through an API if needed
+        setInterval(function() {
+            // Here you would normally call an API or some JavaScript to get the real-time emotion and count
+            // For simplicity, this is just a placeholder
+            emotionText.innerText = 'Dominant Emotion: Happy';  // Update this dynamically
+            countText.innerText = 'People Detected: 2';         // Update this dynamically
+        }, 2000);  // Update every 2 seconds
+    </script>
 </body>
 </html>
