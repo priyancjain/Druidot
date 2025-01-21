@@ -1,5 +1,6 @@
-from flask import Flask, Response, render_template
+from flask import Flask, request, jsonify, render_template
 import cv2
+import numpy as np
 from deepface import DeepFace
 
 # Initialize the Flask app
@@ -8,67 +9,128 @@ app = Flask(__name__)
 # Load the Haar Cascade file
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
-# Initialize the video capture
-cap = cv2.VideoCapture(0)
-
-def generate_frames():
-    while True:
-        # Capture frame from the webcam
-        success, frame = cap.read()
-        if not success:
-            break
-
-        # Convert frame to grayscale for face detection
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # Detect faces in the frame
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-        # Process each detected face
-        for (x, y, w, h) in faces:
-            # Draw bounding box around the face
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-
-            # Crop the detected face
-            face_crop = frame[y:y + h, x:x + w]
-
-            # Try detecting emotion
-            try:
-                # Analyze emotion using DeepFace
-                emotion = DeepFace.analyze(face_crop, actions=['emotion'], enforce_detection=False)
-                # dominant_emotion = emotion['dominant_emotion']
-                if isinstance(emotion, list):
-                     dominant_emotion = emotion[0]['dominant_emotion']
-                else:
-                    dominant_emotion = emotion['dominant_emotion']
-
-                # Put the detected emotion on the frame
-                cv2.putText(frame, dominant_emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
-            except Exception as e:
-                print(f"Emotion detection error: {e}")
-            number_of_people = len(faces)
-            cv2.putText(frame, f'People Detected: {number_of_people}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-
-        # Encode the frame as JPEG
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-
-        # Yield the frame for streaming
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 @app.route('/')
 def index():
     """Render the home page."""
     return render_template('index.html')
 
-@app.route('/video_feed')
-def video_feed():
-    """Video streaming route."""
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/process_frame', methods=['POST'])
+def process_frame():
+    """Process a single frame sent from the client."""
+    try:
+        # Read the image from the request
+        file = request.files['frame'].read()
+        np_img = np.frombuffer(file, np.uint8)
+        frame = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+
+        # Convert frame to grayscale for face detection
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Detect faces in the frame
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        number_of_faces = len(faces)
+
+        # Analyze emotion for each detected face
+        emotions = []
+        for (x, y, w, h) in faces:
+            face_crop = frame[y:y + h, x:x + w]
+            try:
+                emotion = DeepFace.analyze(face_crop, actions=['emotion'], enforce_detection=False)
+                if isinstance(emotion, list):
+                    dominant_emotion = emotion[0]['dominant_emotion']
+                else:
+                    dominant_emotion = emotion['dominant_emotion']
+                emotions.append(dominant_emotion)
+            except Exception as e:
+                emotions.append("Error")
+
+        return jsonify({
+            'number_of_faces': number_of_faces,
+            'emotions': emotions
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+
+
+# from flask import Flask, Response, render_template
+# import cv2
+# from deepface import DeepFace
+
+# # Initialize the Flask app
+# app = Flask(__name__)
+
+# # Load the Haar Cascade file
+# face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+
+# # Initialize the video capture
+# cap = cv2.VideoCapture(0)
+
+# def generate_frames():
+#     while True:
+#         # Capture frame from the webcam
+#         success, frame = cap.read()
+#         if not success:
+#             break
+
+#         # Convert frame to grayscale for face detection
+#         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+#         # Detect faces in the frame
+#         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+#         # Process each detected face
+#         for (x, y, w, h) in faces:
+#             # Draw bounding box around the face
+#             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+
+#             # Crop the detected face
+#             face_crop = frame[y:y + h, x:x + w]
+
+#             # Try detecting emotion
+#             try:
+#                 # Analyze emotion using DeepFace
+#                 emotion = DeepFace.analyze(face_crop, actions=['emotion'], enforce_detection=False)
+#                 # dominant_emotion = emotion['dominant_emotion']
+#                 if isinstance(emotion, list):
+#                      dominant_emotion = emotion[0]['dominant_emotion']
+#                 else:
+#                     dominant_emotion = emotion['dominant_emotion']
+
+#                 # Put the detected emotion on the frame
+#                 cv2.putText(frame, dominant_emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+#             except Exception as e:
+#                 print(f"Emotion detection error: {e}")
+#             number_of_people = len(faces)
+#             cv2.putText(frame, f'People Detected: {number_of_people}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+
+#         # Encode the frame as JPEG
+#         ret, buffer = cv2.imencode('.jpg', frame)
+#         frame = buffer.tobytes()
+
+#         # Yield the frame for streaming
+#         yield (b'--frame\r\n'
+#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+# @app.route('/')
+# def index():
+#     """Render the home page."""
+#     return render_template('index.html')
+
+# @app.route('/video_feed')
+# def video_feed():
+#     """Video streaming route."""
+#     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# if __name__ == "__main__":
+#     app.run(debug=True)
 
 
 

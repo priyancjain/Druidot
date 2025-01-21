@@ -3,70 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Emotion Detection & People Count</title>
+    <title>Emotion Detection & People Counter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            text-align: center;
-            color: #333;
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f0f4f8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
+
         h1 {
             color: #333;
-            font-size: 36px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 2rem;
+        }
+
+        .container {
+            margin-top: 20px;
+            background: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            width: 90%;
+            max-width: 720px;
+            text-align: center;
+        }
+
+        video, canvas {
+            width: 100%;
+            border-radius: 10px;
+            display: block;
+        }
+
+        .info {
             margin-top: 20px;
         }
-        .video-container {
+
+        .info p {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 10px 0;
+            color: #555;
+        }
+
+        .controls {
+            margin-top: 20px;
             display: flex;
             justify-content: center;
-            margin-top: 20px;
+            gap: 15px;
         }
-        .info {
-            background-color: rgba(0, 0, 0, 0.5);
+
+        .button {
+            background: #007BFF;
             color: white;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 20px;
-            font-size: 20px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
-        .emotion-text {
-            font-size: 24px;
-            margin-top: 10px;
-            font-weight: bold;
-            color: #FF6347;
+
+        .button:hover {
+            background: #0056b3;
         }
-        .count-text {
-            font-size: 24px;
-            margin-top: 10px;
-            font-weight: bold;
-            color: #32CD32;
+
+        .button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .button {
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Emotion Detection and People Count</h1>
-    
-    <div class="video-container">
-        <img src="{{ url_for('video_feed') }}" width="640" height="480" />
-    </div>
+    <h1>Emotion Detection & People Counter</h1>
+    <div class="container">
+        <!-- Webcam feed -->
+        <video id="video" autoplay muted></video>
+        <canvas id="canvas" style="display:none;"></canvas>
 
-    <div class="info">
-        <p class="emotion-text" id="dominant-emotion">Dominant Emotion: Waiting...</p>
-        <p class="count-text" id="people-count">People Detected: 0</p>
+        <!-- Information section -->
+        <div class="info">
+            <p id="people-count">👥 People Detected: 0</p>
+            <p id="emotions">😊 Emotions: N/A</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button id="start-btn" class="button">Start Camera</button>
+            <button id="stop-btn" class="button" disabled>Stop Camera</button>
+        </div>
     </div>
 
     <script>
-        // This script will update the UI with the dominant emotion and people count
-        let emotionText = document.getElementById('dominant-emotion');
-        let countText = document.getElementById('people-count');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const peopleCount = document.getElementById('people-count');
+        const emotions = document.getElementById('emotions');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const context = canvas.getContext('2d');
 
-        // You may want to fetch real-time data through an API if needed
-        setInterval(function() {
-            // Here you would normally call an API or some JavaScript to get the real-time emotion and count
-            // For simplicity, this is just a placeholder
-            emotionText.innerText = 'Dominant Emotion: Happy';  // Update this dynamically
-            countText.innerText = 'People Detected: 2';         // Update this dynamically
-        }, 2000);  // Update every 2 seconds
+        let stream = null;
+        let intervalId = null;
+
+        // Function to start the webcam
+        const startCamera = async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                // Capture and process frames every second
+                intervalId = setInterval(() => {
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        const formData = new FormData();
+                        formData.append('frame', blob);
+
+                        // Send the frame to the server
+                        fetch('/process_frame', {
+                            method: 'POST',
+                            body: formData
+                        })
+                            .then((response) => response.json())
+                            .then((data) => {
+                                if (data.error) {
+                                    console.error(data.error);
+                                    return;
+                                }
+                                // Update the UI with the server response
+                                peopleCount.innerText = `👥 People Detected: ${data.number_of_faces}`;
+                                emotions.innerText = `😊 Emotions: ${data.emotions.join(', ')}`;
+                            })
+                            .catch((err) => console.error('Error processing frame:', err));
+                    }, 'image/jpeg');
+                }, 1000);
+            } catch (err) {
+                console.error('Error starting camera:', err);
+            }
+        };
+
+        // Function to stop the webcam
+        const stopCamera = () => {
+            if (stream) {
+                const tracks = stream.getTracks();
+                tracks.forEach((track) => track.stop());
+                stream = null;
+                video.srcObject = null;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+
+                // Clear the frame processing interval
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        };
+
+        // Event listeners for buttons
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
     </script>
 </body>
 </html>
